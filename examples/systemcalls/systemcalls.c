@@ -1,7 +1,11 @@
 #include "systemcalls.h"
 
+#include <fcntl.h>
 #include <stdlib.h>
-
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 /**
  * @param cmd the command to execute with system()
  * @return true if the command in @param cmd was executed
@@ -16,6 +20,10 @@ bool do_system(const char *cmd) {
    *   and return a boolean true if the system() call completed with success
    *   or false() if it returned a failure
    */
+  if (cmd == NULL) {
+    return false;
+  }
+
   return system(cmd) == 0 ? true : false;
 }
 
@@ -58,8 +66,35 @@ bool do_exec(int count, ...) {
    *
    */
 
-  va_end(args);
+  printf("Begin do_exec!\n");
+  int status;
+  int ret;
+  int pid = fork();
 
+  if (pid == 0) {
+    printf("Child!\n");
+    execv(command[0], command);
+    exit(-1);
+  } else if (pid == -1) {
+    printf("Fork Failed.\n");
+    return false;
+  } else {
+    if ((ret = waitpid(pid, &status, 0)) == -1) {
+      printf("parent:error\n");
+      return false;
+    }
+
+    if (WIFEXITED(status)) {
+      if (WEXITSTATUS(status) != 0) {
+        return false;
+      }
+    }
+    if (ret == pid) {
+      printf("Parent: Child process waited for.\n");
+    }
+  }
+
+  va_end(args);
   return true;
 }
 
@@ -88,6 +123,49 @@ bool do_exec_redirect(const char *outputfile, int count, ...) {
    * rest of the behaviour is same as do_exec()
    *
    */
+
+  int status;
+  int ret;
+
+  int fd = open(outputfile, O_WRONLY | O_TRUNC | O_CREAT, 0644);
+  if (fd == -1) {
+    printf("File Open Failed.\n");
+    return false;
+  }
+
+  int pid = fork();
+
+  if (pid == 0) {
+    printf("Child!\n");
+
+    if (dup2(fd, 1) < 0) {
+      printf("***********dup2 Failed.\n");
+      perror("dup2");
+      abort();
+    }
+    close(fd);
+
+    execv(command[0], command);
+    exit(-1);
+  } else if (pid == -1) {
+    printf("Fork Failed.\n");
+    perror("fork");
+    return false;
+  } else {
+    if ((ret = waitpid(pid, &status, 0)) == -1) {
+      printf("parent:error\n");
+      return false;
+    }
+
+    if (WIFEXITED(status)) {
+      if (WEXITSTATUS(status) != 0) {
+        return false;
+      }
+    }
+    if (ret == pid) {
+      printf("Parent: Child process waited for.\n");
+    }
+  }
 
   va_end(args);
 
