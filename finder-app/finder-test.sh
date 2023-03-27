@@ -51,7 +51,7 @@ if test -f "$FILE"; then
   make clean
 fi
 
-make
+# make
 
 echo "pos make"
 
